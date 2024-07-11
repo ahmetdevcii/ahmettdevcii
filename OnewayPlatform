@@ -1,0 +1,59 @@
+using System.Collections;
+using UnityEngine;
+
+public class PlayerOneWayPlatform : MonoBehaviour
+{
+    private Collider2D currentOneWayPlatform; // Changed to Collider2D for better compatibility
+
+    [SerializeField] private Collider2D playerCollider;
+
+    private void Update()
+    {
+        // Check for S key or Down Arrow key press
+        if (Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.DownArrow))
+        {
+            // If there's a current platform, disable collision temporarily
+            if (currentOneWayPlatform != null)
+            {
+                StartCoroutine(DisableCollision());
+            }
+        }
+    }
+
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        // Check if entering a one-way platform
+        if (collision.CompareTag("OneWayPlatform"))
+        {
+            currentOneWayPlatform = collision;
+        }
+    }
+
+    private void OnTriggerExit2D(Collider2D collision)
+    {
+        // Check if exiting a one-way platform
+        if (collision.CompareTag("OneWayPlatform"))
+        {
+            currentOneWayPlatform = null;
+        }
+    }
+
+    private IEnumerator DisableCollision()
+    {
+        // Get the collider of the current platform
+        Collider2D platformCollider = currentOneWayPlatform;
+
+        // Ignore collision between player collider and platform collider temporarily
+        Physics2D.IgnoreCollision(playerCollider, platformCollider, true);
+
+        // Wait for 0.25 seconds
+        float endTime = Time.time + 0.25f;
+        while (Time.time < endTime)
+        {
+            yield return null; // Wait until the time has elapsed
+        }
+
+        // Re-enable collision between player collider and platform collider
+        Physics2D.IgnoreCollision(playerCollider, platformCollider, false);
+    }
+}
