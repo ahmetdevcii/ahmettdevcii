@@ -1,0 +1,206 @@
+using System.Collections;
+using UnityEngine;
+
+public class Jump : Character
+{
+    [SerializeField] private int maxJumps = 3;
+    [SerializeField] private float jumpForce = 100;
+    [SerializeField] private float maxButtonHoldTime = 0.4f;
+    [SerializeField] private float holdForce = 100;
+    [SerializeField] private float distanceToCollider = 0.08f;
+    [SerializeField] private float maxJumpSpeed = 6;
+    [SerializeField] private float maxFallSpeed = -20;
+    [SerializeField] private float downwardJumpingFallSpeed = -30;
+    [SerializeField] private float fallSpeed = 3;
+    [SerializeField] private float gravityMultiplier = 4;
+    [SerializeField] private LayerMask collisionLayer;
+
+    private bool jumpPressed;
+    private bool jumpHeld;
+    private float buttonHoldTime;
+    private float originalGravity;
+    private int numberOfJumpsLeft;
+
+    [HideInInspector] public bool passingThroughPlatform;
+    [HideInInspector] public bool downJumpPressed;
+    [HideInInspector] public bool downwardJumping;
+    private Collider2D nextPlatform;
+
+    protected override void Initializtion()
+    {
+        base.Initializtion();
+        buttonHoldTime = maxButtonHoldTime;
+        originalGravity = rb.gravityScale;
+        numberOfJumpsLeft = maxJumps;
+    }
+
+    private void Update()
+    {
+        CheckForInput();
+        GroundCheck();
+        TurnOnCollision();
+    }
+
+    private void FixedUpdate()
+    {
+        CheckForJump();
+        IsJumping();
+    }
+
+    private void CheckForInput()
+    {
+        jumpPressed = Input.GetKeyDown(KeyCode.Space);
+        jumpHeld = Input.GetKey(KeyCode.Space);
+
+        if (Input.GetAxis("Vertical") < 0 && jumpPressed)
+        {
+            inputDelay = 0;
+            downJumpPressed = true;
+        }
+        else
+        {
+            if (inputDelay < 0.02f)
+            {
+                inputDelay += Time.deltaTime;
+            }
+            if (inputDelay >= 0.02f)
+            {
+                downJumpPressed = false;
+            }
+        }
+
+        if (!character.isGrounded && Input.GetAxis("Vertical") < 0 && jumpPressed)
+        {
+            downwardJumping = true;
+            DownwardJump();
+            if (!passingThroughPlatform)
+            {
+                CheckForPlatformBelow();
+            }
+        }
+    }
+
+    private void CheckForJump()
+    {
+        if (!downJumpPressed && !downwardJumping && jumpPressed)
+        {
+            if ((!character.isGrounded) && numberOfJumpsLeft == maxJumps)
+            {
+                character.isJumping = false;
+                return;
+            }
+
+            numberOfJumpsLeft--;
+            if (numberOfJumpsLeft >= 0)
+            {
+                rb.gravityScale = originalGravity;
+                rb.velocity = new Vector2(rb.velocity.x, 0);
+                character.isJumping = true;
+            }
+        }
+    }
+
+    private void IsJumping()
+    {
+        if (character.isJumping)
+        {
+            rb.AddForce(Vector2.up * jumpForce);
+            AdditionalAir();
+        }
+
+        if (rb.velocity.y > maxJumpSpeed)
+        {
+            rb.velocity = new Vector2(rb.velocity.x, maxJumpSpeed);
+        }
+
+        Falling();
+    }
+
+    private void AdditionalAir()
+    {
+        if (jumpHeld)
+        {
+            buttonHoldTime -= Time.deltaTime;
+            if (buttonHoldTime <= 0)
+            {
+                buttonHoldTime = 0;
+                character.isJumping = false;
+            }
+            else
+                rb.AddForce(Vector2.up * holdForce);
+        }
+        else
+        {
+            character.isJumping = false;
+        }
+    }
+
+    private void DownwardJump()
+    {
+        if (downwardJumping)
+        {
+            rb.velocity = new Vector2(rb.velocity.x, downwardJumpingFallSpeed);
+        }
+    }
+
+    private void Falling()
+    {
+        if (!downwardJumping)
+        {
+            if (!character.isJumping && rb.velocity.y < fallSpeed)
+            {
+                rb.gravityScale = gravityMultiplier;
+            }
+
+            if (rb.velocity.y < maxFallSpeed)
+            {
+                rb.velocity = new Vector2(rb.velocity.x, maxFallSpeed);
+            }
+        }
+    }
+
+    private void GroundCheck()
+    {
+        if (CollisionCheck(Vector2.down, distanceToCollider, collisionLayer) && !character.isJumping)
+        {
+            if (passingThroughPlatform || nextPlatform != null)
+            {
+                anim.SetBool("Grounded", false);
+                character.isGrounded = false;
+            }
+            else
+            {
+                character.isGrounded = true;
+                anim.SetBool("Grounded", true);
+                numberOfJumpsLeft = maxJumps;
+                rb.gravityScale = originalGravity;
+                downwardJumping = false;
+            }
+        }
+        else
+        {
+            anim.SetFloat("yVelocity", rb.velocity.y);
+            anim.SetBool("Grounded", false);
+            character.isGrounded = false;
+        }
+    }
+
+    private void CheckForPlatformBelow()
+    {
+        RaycastHit2D hit = Physics2D.Raycast(new Vector2(col.bounds.center.x, col.bounds.min.y), Vector2.down, 1.0f, collisionLayer);
+        if (hit.collider != null && hit.collider.GetComponent<OneWayPlatform>() && hit.collider.GetComponent<OneWayPlatform>().type != OneWayPlatform.OneWayPlatforms.GoingUp)
+        {
+            nextPlatform = hit.collider;
+            Physics2D.IgnoreCollision(col, nextPlatform, true);
+        }
+    }
+
+    private void TurnOnCollision()
+    {
+        if (nextPlatform != null && col.bounds.max.y < nextPlatform.bounds.min.y)
+        {
+            Physics2D.IgnoreCollision(col, nextPlatform, false);
+            nextPlatform = null;
+        }
+    }
+}
